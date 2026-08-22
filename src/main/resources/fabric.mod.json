@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "nyxclient",
+	"version": "${version}",
+	"name": "Nyx Client",
+	"description": "Standalone Fabric utility/cheat client for singleplayer and private servers. Not affiliated with or injected into any third-party client.",
+	"authors": [
+		"you"
+	],
+	"contact": {},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.nyxclient.NyxClient"
+		]
+	},
+	"mixins": [
+		"nyxclient.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"fabric-api": "*",
+		"minecraft": "~1.21.4",
+		"java": ">=21"
+	}
+}
