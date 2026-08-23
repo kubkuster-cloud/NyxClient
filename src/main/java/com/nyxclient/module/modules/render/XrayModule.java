@@ -14,7 +14,7 @@ public class XrayModule extends Module {
 	public static volatile boolean active = false;
 
 	public XrayModule() {
-		super("Xray", "Culls common terrain blocks during chunk mesh building so ores stay visible through stone. Existing chunks are reloaded on toggle; this only affects your local render, not the actual world.", Category.RENDER);
+		super("Xray", "Makes ores render fully opaque and lit while every other block renders translucent, so ores stand out through stone. Existing chunks are reloaded on toggle; this only affects your local render, not the actual world.", Category.RENDER);
 	}
 
 	@Override
