@@ -14,7 +14,8 @@ import java.util.Map;
 
 public class ClickGuiScreen extends Screen {
 
-	private static final int PANEL_WIDTH = 100;
+	private static final int MIN_WIDTH = 58;
+	private static final int PADDING_X = 5;
 	private static final int HEADER_HEIGHT = 15;
 	private static final int ROW_HEIGHT = 13;
 	private static final int ARROW_ZONE = 12;
@@ -42,13 +43,42 @@ public class ClickGuiScreen extends Screen {
 	@Override
 	protected void init() {
 		panels.clear();
-		int col = 0;
-		for (Category category : Category.values()) {
-			int defaultX = 10 + col * (PANEL_WIDTH + 8);
-			Panel panel = PANELS.computeIfAbsent(category, c -> new Panel(c, defaultX, 8));
+
+		Category[] categories = Category.values();
+		List<Panel> ordered = new ArrayList<>();
+		boolean anyNew = false;
+
+		for (Category category : categories) {
+			boolean isNew = !PANELS.containsKey(category);
+			anyNew |= isNew;
+			Panel panel = PANELS.computeIfAbsent(category, c -> new Panel(c, 10, 8));
 			panel.modules = NyxClient.moduleManager.getModules(category);
-			panels.add(panel);
-			col++;
+			panel.fitWidth();
+			ordered.add(panel);
+		}
+
+		// Only lay panels out on their first creation - once the player has dragged one, later
+		// re-opens of the GUI must leave it where they put it, not snap it back to the grid.
+		if (anyNew) {
+			layoutGrid(ordered);
+		}
+
+		panels.addAll(ordered);
+	}
+
+	private void layoutGrid(List<Panel> ordered) {
+		int topRowHeight = 0;
+		for (int i = 0; i < ordered.size(); i += 2) {
+			topRowHeight = Math.max(topRowHeight, ordered.get(i).height());
+		}
+		int secondRowY = 8 + topRowHeight + 6;
+
+		for (int i = 0; i < ordered.size(); i++) {
+			Panel panel = ordered.get(i);
+			int col = i % 2;
+			int row = i / 2;
+			panel.x = col == 0 ? 10 : ordered.get(i - 1).x + ordered.get(i - 1).width + 6;
+			panel.y = row == 0 ? 8 : secondRowY;
 		}
 	}
 
@@ -113,6 +143,7 @@ public class ClickGuiScreen extends Screen {
 		List<Module> modules = List.of();
 		int x;
 		int y;
+		int width = MIN_WIDTH;
 		boolean collapsed;
 
 		Panel(Category category, int x, int y) {
@@ -121,23 +152,36 @@ public class ClickGuiScreen extends Screen {
 			this.y = y;
 		}
 
+		// Panels aren't a fixed width: a short list like "Killaura" alone shouldn't drag the header's
+		// arrow far away from its name, so the box shrinks to fit whichever is widest - the category
+		// name plus its collapse arrow, or the longest module name in the list.
+		void fitWidth() {
+			int headerWidth = PADDING_X + textRenderer.getWidth(category.name()) + 4 + ARROW_ZONE;
+			int rowWidth = 0;
+			for (Module module : modules) {
+				rowWidth = Math.max(rowWidth, textRenderer.getWidth(module.getName()));
+			}
+			rowWidth += PADDING_X * 2;
+			width = Math.max(MIN_WIDTH, Math.max(headerWidth, rowWidth));
+		}
+
 		int height() {
 			if (collapsed) return HEADER_HEIGHT;
 			return HEADER_HEIGHT + modules.size() * ROW_HEIGHT;
 		}
 
 		boolean isOverHeader(double mouseX, double mouseY) {
-			return mouseX >= x && mouseX <= x + PANEL_WIDTH && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
+			return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
 		}
 
 		boolean isOverArrow(double mouseX, double mouseY) {
-			return mouseX >= x + PANEL_WIDTH - ARROW_ZONE && mouseX <= x + PANEL_WIDTH
+			return mouseX >= x + width - ARROW_ZONE && mouseX <= x + width
 					&& mouseY >= y && mouseY <= y + HEADER_HEIGHT;
 		}
 
 		Module moduleAt(double mouseX, double mouseY) {
 			if (collapsed) return null;
-			if (mouseX < x || mouseX > x + PANEL_WIDTH) return null;
+			if (mouseX < x || mouseX > x + width) return null;
 			int rowY = y + HEADER_HEIGHT;
 			for (Module module : modules) {
 				if (mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT) {
@@ -152,24 +196,24 @@ public class ClickGuiScreen extends Screen {
 			int bodyHeight = height();
 
 			if (!collapsed && !modules.isEmpty()) {
-				context.fill(x, y, x + PANEL_WIDTH, y + bodyHeight, PANEL_BG);
+				context.fill(x, y, x + width, y + bodyHeight, PANEL_BG);
 			}
-			context.fill(x, y, x + PANEL_WIDTH, y + HEADER_HEIGHT, HEADER_BG);
+			context.fill(x, y, x + width, y + HEADER_HEIGHT, HEADER_BG);
 
-			context.drawTextWithShadow(textRenderer, Text.literal(category.name()), x + 5, y + (HEADER_HEIGHT - 8) / 2, TEXT_HEADER);
-			context.drawTextWithShadow(textRenderer, Text.literal(collapsed ? "▶" : "▼"), x + PANEL_WIDTH - 10, y + (HEADER_HEIGHT - 8) / 2, ARROW_COLOR);
+			context.drawTextWithShadow(textRenderer, Text.literal(category.name()), x + PADDING_X, y + (HEADER_HEIGHT - 8) / 2, TEXT_HEADER);
+			context.drawTextWithShadow(textRenderer, Text.literal(collapsed ? "▶" : "▼"), x + width - 10, y + (HEADER_HEIGHT - 8) / 2, ARROW_COLOR);
 
 			if (collapsed) return;
 
 			int rowY = y + HEADER_HEIGHT;
 			for (Module module : modules) {
-				boolean hovered = mouseX >= x && mouseX <= x + PANEL_WIDTH && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
+				boolean hovered = mouseX >= x && mouseX <= x + width && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
 				if (hovered) {
-					context.fill(x, rowY, x + PANEL_WIDTH, rowY + ROW_HEIGHT, ROW_HOVER);
+					context.fill(x, rowY, x + width, rowY + ROW_HEIGHT, ROW_HOVER);
 				}
 
 				int textColor = module.isEnabled() ? TEXT_ENABLED : TEXT_DISABLED;
-				context.drawTextWithShadow(textRenderer, Text.literal(module.getName()), x + 5, rowY + (ROW_HEIGHT - 8) / 2, textColor);
+				context.drawTextWithShadow(textRenderer, Text.literal(module.getName()), x + PADDING_X, rowY + (ROW_HEIGHT - 8) / 2, textColor);
 
 				rowY += ROW_HEIGHT;
 			}
