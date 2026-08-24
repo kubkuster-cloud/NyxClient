@@ -1,5 +1,6 @@
 package com.nyxclient.module;
 
+import com.nyxclient.module.modules.combat.AutoTotemModule;
 import com.nyxclient.module.modules.combat.KillauraModule;
 import com.nyxclient.module.modules.movement.FlyModule;
 import com.nyxclient.module.modules.movement.JesusModule;
@@ -8,6 +9,7 @@ import com.nyxclient.module.modules.movement.ScaffoldModule;
 import com.nyxclient.module.modules.movement.SpeedModule;
 import com.nyxclient.module.modules.render.ESPModule;
 import com.nyxclient.module.modules.render.FullbrightModule;
+import com.nyxclient.module.modules.world.AutoToolModule;
 import com.nyxclient.module.modules.world.FastbreakModule;
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
@@ -29,9 +31,11 @@ public class ModuleManager {
 		register(new NoFallModule());
 		register(new JesusModule());
 		register(new KillauraModule());
+		register(new AutoTotemModule());
 		register(new ESPModule());
 		register(new FullbrightModule());
 		register(new FastbreakModule());
+		register(new AutoToolModule());
 	}
 
 	private void register(Module module) {
