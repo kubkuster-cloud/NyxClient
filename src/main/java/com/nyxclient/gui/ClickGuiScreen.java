@@ -5,7 +5,9 @@ import com.nyxclient.module.Category;
 import com.nyxclient.module.Module;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -19,6 +21,12 @@ public class ClickGuiScreen extends Screen {
 	private static final int HEADER_HEIGHT = 15;
 	private static final int ROW_HEIGHT = 13;
 	private static final int ARROW_ZONE = 12;
+	private static final int RADIUS = 3;
+
+	// OpenSans (SIL OFL license, see assets/nyxclient/font/OFL.txt) in place of Minecraft's bitmap
+	// default font. Each font.json falls back to minecraft:default for any glyph it doesn't cover.
+	private static final Identifier FONT_REGULAR = Identifier.of("nyxclient", "sans");
+	private static final Identifier FONT_HEADER = Identifier.of("nyxclient", "sans_semibold");
 
 	private static final int PANEL_BG = 0x38808080;
 	private static final int HEADER_BG = 0xF0000000;
@@ -138,6 +146,10 @@ public class ClickGuiScreen extends Screen {
 		return false;
 	}
 
+	private static Text styled(String text, Identifier font) {
+		return Text.literal(text).setStyle(Style.EMPTY.withFont(font));
+	}
+
 	private final class Panel {
 		final Category category;
 		List<Module> modules = List.of();
@@ -156,10 +168,10 @@ public class ClickGuiScreen extends Screen {
 		// arrow far away from its name, so the box shrinks to fit whichever is widest - the category
 		// name plus its collapse arrow, or the longest module name in the list.
 		void fitWidth() {
-			int headerWidth = PADDING_X + textRenderer.getWidth(category.name()) + 4 + ARROW_ZONE;
+			int headerWidth = PADDING_X + textRenderer.getWidth(styled(category.name(), FONT_HEADER)) + 4 + ARROW_ZONE;
 			int rowWidth = 0;
 			for (Module module : modules) {
-				rowWidth = Math.max(rowWidth, textRenderer.getWidth(module.getName()));
+				rowWidth = Math.max(rowWidth, textRenderer.getWidth(styled(module.getName(), FONT_REGULAR)));
 			}
 			rowWidth += PADDING_X * 2;
 			width = Math.max(MIN_WIDTH, Math.max(headerWidth, rowWidth));
@@ -195,12 +207,15 @@ public class ClickGuiScreen extends Screen {
 		void render(DrawContext context, int mouseX, int mouseY) {
 			int bodyHeight = height();
 
-			if (!collapsed && !modules.isEmpty()) {
-				context.fill(x, y, x + width, y + bodyHeight, PANEL_BG);
+			boolean hasBody = !collapsed && !modules.isEmpty();
+			if (hasBody) {
+				RoundedRect.fill(context, x, y, x + width, y + bodyHeight, RADIUS, PANEL_BG);
+				RoundedRect.fillTop(context, x, y, x + width, y + HEADER_HEIGHT, RADIUS, HEADER_BG);
+			} else {
+				RoundedRect.fill(context, x, y, x + width, y + HEADER_HEIGHT, RADIUS, HEADER_BG);
 			}
-			context.fill(x, y, x + width, y + HEADER_HEIGHT, HEADER_BG);
 
-			context.drawTextWithShadow(textRenderer, Text.literal(category.name()), x + PADDING_X, y + (HEADER_HEIGHT - 8) / 2, TEXT_HEADER);
+			context.drawTextWithShadow(textRenderer, styled(category.name(), FONT_HEADER), x + PADDING_X, y + (HEADER_HEIGHT - 8) / 2, TEXT_HEADER);
 			context.drawTextWithShadow(textRenderer, Text.literal(collapsed ? "▶" : "▼"), x + width - 10, y + (HEADER_HEIGHT - 8) / 2, ARROW_COLOR);
 
 			if (collapsed) return;
@@ -213,7 +228,7 @@ public class ClickGuiScreen extends Screen {
 				}
 
 				int textColor = module.isEnabled() ? TEXT_ENABLED : TEXT_DISABLED;
-				context.drawTextWithShadow(textRenderer, Text.literal(module.getName()), x + PADDING_X, rowY + (ROW_HEIGHT - 8) / 2, textColor);
+				context.drawTextWithShadow(textRenderer, styled(module.getName(), FONT_REGULAR), x + PADDING_X, rowY + (ROW_HEIGHT - 8) / 2, textColor);
 
 				rowY += ROW_HEIGHT;
 			}

@@ -2,6 +2,7 @@ package com.nyxclient.module;
 
 import com.nyxclient.module.modules.combat.KillauraModule;
 import com.nyxclient.module.modules.movement.FlyModule;
+import com.nyxclient.module.modules.movement.JesusModule;
 import com.nyxclient.module.modules.movement.NoFallModule;
 import com.nyxclient.module.modules.movement.ScaffoldModule;
 import com.nyxclient.module.modules.movement.SpeedModule;
@@ -26,6 +27,7 @@ public class ModuleManager {
 		register(new SpeedModule());
 		register(new ScaffoldModule());
 		register(new NoFallModule());
+		register(new JesusModule());
 		register(new KillauraModule());
 		register(new ESPModule());
 		register(new FullbrightModule());
