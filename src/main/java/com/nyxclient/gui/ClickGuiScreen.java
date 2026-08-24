@@ -3,6 +3,10 @@ package com.nyxclient.gui;
 import com.nyxclient.NyxClient;
 import com.nyxclient.module.Category;
 import com.nyxclient.module.Module;
+import com.nyxclient.setting.BoolSetting;
+import com.nyxclient.setting.DoubleSetting;
+import com.nyxclient.setting.IntSetting;
+import com.nyxclient.setting.Setting;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Style;
@@ -11,8 +15,10 @@ import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ClickGuiScreen extends Screen {
 
@@ -20,10 +26,14 @@ public class ClickGuiScreen extends Screen {
 	private static final int PADDING_X = 5;
 	private static final int HEADER_HEIGHT = 15;
 	private static final int ROW_HEIGHT = 13;
+	private static final int SETTING_ROW_HEIGHT = 12;
+	private static final int SETTING_INDENT = 9;
 	private static final int ARROW_ZONE = 12;
 	private static final int RADIUS = 3;
+	private static final int CHECKBOX_SIZE = 6;
+	private static final int TRACK_HEIGHT = 2;
 
-	// OpenSans (SIL OFL license, see assets/nyxclient/font/OFL.txt) in place of Minecraft's bitmap
+	// OpenSans (SIL OFL license, see licenses/OFL-OpenSans.txt) in place of Minecraft's bitmap
 	// default font. Each font.json falls back to minecraft:default for any glyph it doesn't cover.
 	private static final Identifier FONT_REGULAR = Identifier.of("nyxclient", "sans");
 	private static final Identifier FONT_HEADER = Identifier.of("nyxclient", "sans_semibold");
@@ -33,16 +43,28 @@ public class ClickGuiScreen extends Screen {
 	private static final int TEXT_HEADER = 0xFFA5A5AC;
 	private static final int TEXT_ENABLED = 0xFFF5F5F5;
 	private static final int TEXT_DISABLED = 0xFF9A9AA0;
+	private static final int TEXT_SETTING = 0xFFC2C2C8;
+	private static final int TEXT_SETTING_VALUE = 0xFF8A8A90;
 	private static final int ROW_HOVER = 0x26FFFFFF;
+	private static final int SETTINGS_BG = 0x30000000;
 	private static final int ARROW_COLOR = 0xFF8A8A90;
+	private static final int TRACK_BG = 0x50FFFFFF;
+	private static final int TRACK_FILL = 0xFFE8E8EE;
+	private static final int CHECKBOX_OFF = 0x50FFFFFF;
+	private static final int CHECKBOX_ON = 0xFFE8E8EE;
 
-	// Static so drag/collapse state survives closing and reopening the GUI within the same game session.
+	// Static so drag/collapse/expand state survives closing and reopening the GUI within the same session.
 	private static final Map<Category, Panel> PANELS = new EnumMap<>(Category.class);
+	private static final Set<Module> EXPANDED = new HashSet<>();
 
 	private final List<Panel> panels = new ArrayList<>();
 	private Panel dragging;
 	private int dragOffsetX;
 	private int dragOffsetY;
+
+	private Setting<?> draggingSlider;
+	private int sliderTrackX1;
+	private int sliderTrackX2;
 
 	public ClickGuiScreen() {
 		super(Text.literal("Nyx Client"));
@@ -100,27 +122,50 @@ public class ClickGuiScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (button == 0) {
-			for (int i = panels.size() - 1; i >= 0; i--) {
-				Panel panel = panels.get(i);
-				if (panel.isOverArrow(mouseX, mouseY)) {
-					panel.collapsed = !panel.collapsed;
-					return true;
+		for (int i = panels.size() - 1; i >= 0; i--) {
+			Panel panel = panels.get(i);
+
+			if (button == 0 && panel.isOverArrow(mouseX, mouseY)) {
+				panel.collapsed = !panel.collapsed;
+				return true;
+			}
+			if (button == 0 && panel.isOverHeader(mouseX, mouseY)) {
+				dragging = panel;
+				dragOffsetX = (int) mouseX - panel.x;
+				dragOffsetY = (int) mouseY - panel.y;
+				panels.remove(i);
+				panels.add(panel);
+				return true;
+			}
+
+			RowHit hit = panel.rowAt(mouseX, mouseY);
+			if (hit == null) continue;
+
+			if (hit.module != null) {
+				// Left toggles the module, right opens its settings - so a module with settings is
+				// still one click to turn on, same as one without.
+				if (button == 0) {
+					hit.module.toggle();
+				} else if (button == 1 && !hit.module.getSettings().isEmpty()) {
+					if (!EXPANDED.remove(hit.module)) {
+						EXPANDED.add(hit.module);
+					}
+					panel.fitWidth();
 				}
-				if (panel.isOverHeader(mouseX, mouseY)) {
-					dragging = panel;
-					dragOffsetX = (int) mouseX - panel.x;
-					dragOffsetY = (int) mouseY - panel.y;
-					panels.remove(i);
-					panels.add(panel);
-					return true;
-				}
-				Module clicked = panel.moduleAt(mouseX, mouseY);
-				if (clicked != null) {
-					clicked.toggle();
-					return true;
+				return true;
+			}
+
+			if (button == 0) {
+				if (hit.setting instanceof BoolSetting bool) {
+					bool.toggle();
+				} else {
+					draggingSlider = hit.setting;
+					sliderTrackX1 = hit.trackX1;
+					sliderTrackX2 = hit.trackX2;
+					applySlider(mouseX);
 				}
 			}
+			return true;
 		}
 		return super.mouseClicked(mouseX, mouseY, button);
 	}
@@ -132,13 +177,49 @@ public class ClickGuiScreen extends Screen {
 			dragging.y = (int) mouseY - dragOffsetY;
 			return true;
 		}
+		if (draggingSlider != null) {
+			applySlider(mouseX);
+			return true;
+		}
 		return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
 	}
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
 		dragging = null;
+		draggingSlider = null;
 		return super.mouseReleased(mouseX, mouseY, button);
+	}
+
+	private void applySlider(double mouseX) {
+		int trackWidth = sliderTrackX2 - sliderTrackX1;
+		if (trackWidth <= 0) return;
+		double fraction = Math.max(0, Math.min(1, (mouseX - sliderTrackX1) / trackWidth));
+
+		if (draggingSlider instanceof DoubleSetting d) {
+			d.set(d.getMin() + fraction * (d.getMax() - d.getMin()));
+		} else if (draggingSlider instanceof IntSetting n) {
+			n.set((int) Math.round(n.getMin() + fraction * (n.getMax() - n.getMin())));
+		}
+	}
+
+	private static double fractionOf(Setting<?> setting) {
+		if (setting instanceof DoubleSetting d) {
+			double span = d.getMax() - d.getMin();
+			return span <= 0 ? 0 : (d.get() - d.getMin()) / span;
+		}
+		if (setting instanceof IntSetting n) {
+			double span = n.getMax() - n.getMin();
+			return span <= 0 ? 0 : (n.get() - n.getMin()) / span;
+		}
+		return 0;
+	}
+
+	private static String valueLabel(Setting<?> setting) {
+		if (setting instanceof DoubleSetting d) {
+			return String.format("%.2f", d.get());
+		}
+		return String.valueOf(setting.get());
 	}
 
 	@Override
@@ -148,6 +229,29 @@ public class ClickGuiScreen extends Screen {
 
 	private static Text styled(String text, Identifier font) {
 		return Text.literal(text).setStyle(Style.EMPTY.withFont(font));
+	}
+
+	/** What sits under the cursor: either a module row, or one setting row plus its slider track bounds. */
+	private static final class RowHit {
+		final Module module;
+		final Setting<?> setting;
+		final int trackX1;
+		final int trackX2;
+
+		private RowHit(Module module, Setting<?> setting, int trackX1, int trackX2) {
+			this.module = module;
+			this.setting = setting;
+			this.trackX1 = trackX1;
+			this.trackX2 = trackX2;
+		}
+
+		static RowHit ofModule(Module module) {
+			return new RowHit(module, null, 0, 0);
+		}
+
+		static RowHit ofSetting(Setting<?> setting, int trackX1, int trackX2) {
+			return new RowHit(null, setting, trackX1, trackX2);
+		}
 	}
 
 	private final class Panel {
@@ -166,20 +270,37 @@ public class ClickGuiScreen extends Screen {
 
 		// Panels aren't a fixed width: a short list like "Killaura" alone shouldn't drag the header's
 		// arrow far away from its name, so the box shrinks to fit whichever is widest - the category
-		// name plus its collapse arrow, or the longest module name in the list.
+		// name plus its collapse arrow, the longest module name, or an expanded setting's name+value.
 		void fitWidth() {
-			int headerWidth = PADDING_X + textRenderer.getWidth(styled(category.name(), FONT_HEADER)) + 4 + ARROW_ZONE;
-			int rowWidth = 0;
+			int widest = PADDING_X + textRenderer.getWidth(styled(category.name(), FONT_HEADER)) + 4 + ARROW_ZONE;
+
 			for (Module module : modules) {
-				rowWidth = Math.max(rowWidth, textRenderer.getWidth(styled(module.getName(), FONT_REGULAR)));
+				widest = Math.max(widest, textRenderer.getWidth(styled(module.getName(), FONT_REGULAR)) + PADDING_X * 2);
+
+				if (!EXPANDED.contains(module)) continue;
+				for (Setting<?> setting : module.getSettings()) {
+					int nameWidth = textRenderer.getWidth(styled(setting.getName(), FONT_REGULAR));
+					int valueWidth = textRenderer.getWidth(styled(valueLabel(setting), FONT_REGULAR));
+					widest = Math.max(widest, SETTING_INDENT + nameWidth + 8 + valueWidth + PADDING_X);
+				}
 			}
-			rowWidth += PADDING_X * 2;
-			width = Math.max(MIN_WIDTH, Math.max(headerWidth, rowWidth));
+
+			width = Math.max(MIN_WIDTH, widest);
 		}
 
 		int height() {
 			if (collapsed) return HEADER_HEIGHT;
-			return HEADER_HEIGHT + modules.size() * ROW_HEIGHT;
+
+			int h = HEADER_HEIGHT;
+			for (Module module : modules) {
+				h += ROW_HEIGHT + settingsHeight(module);
+			}
+			return h;
+		}
+
+		private int settingsHeight(Module module) {
+			if (!EXPANDED.contains(module)) return 0;
+			return module.getSettings().size() * SETTING_ROW_HEIGHT;
 		}
 
 		boolean isOverHeader(double mouseX, double mouseY) {
@@ -191,15 +312,24 @@ public class ClickGuiScreen extends Screen {
 					&& mouseY >= y && mouseY <= y + HEADER_HEIGHT;
 		}
 
-		Module moduleAt(double mouseX, double mouseY) {
+		RowHit rowAt(double mouseX, double mouseY) {
 			if (collapsed) return null;
 			if (mouseX < x || mouseX > x + width) return null;
+
 			int rowY = y + HEADER_HEIGHT;
 			for (Module module : modules) {
-				if (mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT) {
-					return module;
+				if (mouseY >= rowY && mouseY < rowY + ROW_HEIGHT) {
+					return RowHit.ofModule(module);
 				}
 				rowY += ROW_HEIGHT;
+
+				if (!EXPANDED.contains(module)) continue;
+				for (Setting<?> setting : module.getSettings()) {
+					if (mouseY >= rowY && mouseY < rowY + SETTING_ROW_HEIGHT) {
+						return RowHit.ofSetting(setting, x + SETTING_INDENT, x + width - PADDING_X);
+					}
+					rowY += SETTING_ROW_HEIGHT;
+				}
 			}
 			return null;
 		}
@@ -222,7 +352,7 @@ public class ClickGuiScreen extends Screen {
 
 			int rowY = y + HEADER_HEIGHT;
 			for (Module module : modules) {
-				boolean hovered = mouseX >= x && mouseX <= x + width && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
+				boolean hovered = mouseX >= x && mouseX <= x + width && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
 				if (hovered) {
 					context.fill(x, rowY, x + width, rowY + ROW_HEIGHT, ROW_HOVER);
 				}
@@ -230,7 +360,52 @@ public class ClickGuiScreen extends Screen {
 				int textColor = module.isEnabled() ? TEXT_ENABLED : TEXT_DISABLED;
 				context.drawTextWithShadow(textRenderer, styled(module.getName(), FONT_REGULAR), x + PADDING_X, rowY + (ROW_HEIGHT - 8) / 2, textColor);
 
+				// A faint dot marks modules that have settings worth right-clicking for.
+				if (!module.getSettings().isEmpty()) {
+					boolean expanded = EXPANDED.contains(module);
+					context.fill(x + width - PADDING_X - 2, rowY + ROW_HEIGHT / 2 - 1, x + width - PADDING_X, rowY + ROW_HEIGHT / 2 + 1,
+							expanded ? TEXT_ENABLED : TEXT_SETTING_VALUE);
+				}
+
 				rowY += ROW_HEIGHT;
+				if (!EXPANDED.contains(module)) continue;
+
+				int settingsHeight = settingsHeight(module);
+				if (settingsHeight > 0) {
+					context.fill(x, rowY, x + width, rowY + settingsHeight, SETTINGS_BG);
+				}
+
+				for (Setting<?> setting : module.getSettings()) {
+					renderSetting(context, setting, rowY);
+					rowY += SETTING_ROW_HEIGHT;
+				}
+			}
+		}
+
+		private void renderSetting(DrawContext context, Setting<?> setting, int rowY) {
+			int textY = rowY + 1;
+			context.drawTextWithShadow(textRenderer, styled(setting.getName(), FONT_REGULAR), x + SETTING_INDENT, textY, TEXT_SETTING);
+
+			if (setting instanceof BoolSetting bool) {
+				int boxX2 = x + width - PADDING_X;
+				int boxX1 = boxX2 - CHECKBOX_SIZE;
+				int boxY1 = rowY + (SETTING_ROW_HEIGHT - CHECKBOX_SIZE) / 2;
+				context.fill(boxX1, boxY1, boxX2, boxY1 + CHECKBOX_SIZE, bool.get() ? CHECKBOX_ON : CHECKBOX_OFF);
+				return;
+			}
+
+			String value = valueLabel(setting);
+			int valueWidth = textRenderer.getWidth(styled(value, FONT_REGULAR));
+			context.drawTextWithShadow(textRenderer, styled(value, FONT_REGULAR), x + width - PADDING_X - valueWidth, textY, TEXT_SETTING_VALUE);
+
+			int trackX1 = x + SETTING_INDENT;
+			int trackX2 = x + width - PADDING_X;
+			int trackY = rowY + SETTING_ROW_HEIGHT - TRACK_HEIGHT - 1;
+			context.fill(trackX1, trackY, trackX2, trackY + TRACK_HEIGHT, TRACK_BG);
+
+			int fillWidth = (int) Math.round((trackX2 - trackX1) * fractionOf(setting));
+			if (fillWidth > 0) {
+				context.fill(trackX1, trackY, trackX1 + fillWidth, trackY + TRACK_HEIGHT, TRACK_FILL);
 			}
 		}
 	}
