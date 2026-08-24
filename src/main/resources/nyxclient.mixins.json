@@ -4,12 +4,10 @@
 	"package": "com.nyxclient.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"BlockModelRendererMixin",
-		"BlockRenderManagerMixin",
 		"ClientPlayerEntityMixin",
 		"EntityMixin",
+		"MinecraftClientMixin",
 		"PlayerEntityMixin",
-		"RenderLayersMixin",
 		"WorldRendererMixin"
 	],
 	"injectors": {
