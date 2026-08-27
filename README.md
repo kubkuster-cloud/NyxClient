@@ -2,9 +2,14 @@
 
 Standalone Fabric mod for Minecraft 1.21.4. Not affiliated with, injected into, or designed to
 impersonate any third-party client (Lunar, Badlion, etc.). Intended for singleplayer, LAN, and
-private servers you have permission to test on — it makes no attempt to evade server-side
-anti-cheat, and several modules (Fly, NoFall, Fastbreak) only actually work where the server
-trusts client-reported state, which most public anti-cheat-protected servers don't.
+private servers you have permission to test on. Several modules (Fly, NoFall, Fastbreak) only
+actually work where the server trusts client-reported state, which most anti-cheat-protected
+servers don't.
+
+The AntiCheat module shapes the other combat modules' output to resemble real mouse input and
+reacts to server setbacks. It exists to make behaviour observable during authorized testing on a
+server whose operator has agreed to it — running it anywhere else is a straightforward way to get
+banned, and is not what this repository is for.
 
 ## Build
 
@@ -56,6 +61,7 @@ java -jar gradle\wrapper\gradle-wrapper.jar runClient
 | NoFall | Movement | Zeroes client fall distance every tick |
 | Killaura | Combat | Attacks nearest valid entity on a tick cooldown |
 | AimAssist | Combat | Eases the view toward the entity closest to the crosshair (FOV cone, capped turn rate) |
+| AntiCheat | Combat | Quantizes/rate-limits the combat modules' rotations, jitters attack timing, pauses on setbacks |
 | ESP | Render | Uses vanilla's glow-outline pass to show entities through walls |
 | Xray | Render | Cancels chunk-mesh rendering for non-ore blocks |
 | Fastbreak | World | Overrides calculated mining speed to break blocks instantly |

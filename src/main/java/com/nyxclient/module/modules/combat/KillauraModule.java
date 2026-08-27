@@ -40,6 +40,8 @@ public class KillauraModule extends Module {
 		ClientPlayerEntity player = client.player;
 		if (player == null || client.world == null || client.interactionManager == null) return;
 
+		if (AntiCheatModule.isSuppressed()) return;
+
 		if (cooldown > 0) {
 			cooldown--;
 			return;
@@ -50,11 +52,15 @@ public class KillauraModule extends Module {
 
 		if (rotate.get()) {
 			faceEntity(player, target);
+			// AntiCheat spreads the turn over several ticks, so the view may still be swinging
+			// toward the target. Returning without touching the cooldown lets the next tick try
+			// again the moment it converges, rather than swinging at something off-crosshair.
+			if (!AntiCheatModule.isAimedAt(player, target)) return;
 		}
 
 		client.interactionManager.attackEntity(player, target);
 		player.swingHand(Hand.MAIN_HAND);
-		cooldown = cooldownTicks.get();
+		cooldown = AntiCheatModule.jitterCooldown(cooldownTicks.get());
 	}
 
 	private LivingEntity findTarget(MinecraftClient client, ClientPlayerEntity player) {
@@ -96,7 +102,6 @@ public class KillauraModule extends Module {
 		float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
 		float pitch = (float) -Math.toDegrees(Math.atan2(dy, horizontalDist));
 
-		player.setYaw(yaw);
-		player.setPitch(pitch);
+		AntiCheatModule.applyLook(player, yaw, pitch);
 	}
 }

@@ -42,6 +42,7 @@ public class AimAssistModule extends Module {
 		ClientPlayerEntity player = client.player;
 		if (player == null || client.world == null) return;
 
+		if (AntiCheatModule.isSuppressed()) return;
 		if (onlyWhileAttacking.get() && !client.options.attackKey.isPressed()) return;
 
 		LivingEntity target = findTarget(client, player);
@@ -50,12 +51,14 @@ public class AimAssistModule extends Module {
 		float desiredYaw = yawTo(player, target);
 		float desiredPitch = pitchTo(player, target);
 
-		player.setYaw(player.getYaw() + step(MathHelper.wrapDegrees(desiredYaw - player.getYaw())));
+		float nextYaw = player.getYaw() + step(MathHelper.wrapDegrees(desiredYaw - player.getYaw()));
+		float nextPitch = assistPitch.get()
+				? player.getPitch() + step(desiredPitch - player.getPitch())
+				: player.getPitch();
 
-		if (assistPitch.get()) {
-			float pitch = player.getPitch() + step(desiredPitch - player.getPitch());
-			player.setPitch(MathHelper.clamp(pitch, -90.0f, 90.0f));
-		}
+		// Routed through AntiCheat so the eased steps also land on the mouse lattice; its own turn
+		// cap is a no-op here, since this module's step() has already produced a smaller delta.
+		AntiCheatModule.applyLook(player, nextYaw, nextPitch);
 	}
 
 	/** Fraction of the remaining angle to close this tick, capped at the per-tick turn budget. */

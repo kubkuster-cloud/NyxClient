@@ -1,6 +1,7 @@
 package com.nyxclient.module;
 
 import com.nyxclient.module.modules.combat.AimAssistModule;
+import com.nyxclient.module.modules.combat.AntiCheatModule;
 import com.nyxclient.module.modules.combat.AutoArmorModule;
 import com.nyxclient.module.modules.combat.AutoTotemModule;
 import com.nyxclient.module.modules.combat.KillauraModule;
@@ -34,6 +35,9 @@ public class ModuleManager {
 		register(new ScaffoldModule());
 		register(new NoFallModule());
 		register(new JesusModule());
+		// Registered ahead of the combat modules it shapes: its tick records the position that
+		// setback detection compares against, and clears the post-setback pause the others read.
+		register(new AntiCheatModule());
 		register(new KillauraModule());
 		register(new AimAssistModule());
 		register(new AutoTotemModule());
