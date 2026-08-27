@@ -3,8 +3,24 @@ plugins {
 	id 'maven-publish'
 }
 
-version = project.mod_version
+// Every build gets its own jar filename, so a new jar dropped into .minecraft/mods can never be
+// mistaken for - or silently overwrite - the previous one. The counter lives in an untracked file
+// rather than in gradle.properties on purpose: bumping a tracked file would leave the working tree
+// dirty after every single build, and the number is a local fact about this machine, not something
+// worth carrying in history. mod_version stays the real version and is still bumped by hand.
+def buildNumberFile = file('.build-number')
+def buildNumber = buildNumberFile.exists() ? (buildNumberFile.text.trim() as Integer) : 1
+
+version = "${project.mod_version}+build.${buildNumber}"
 group = project.maven_group
+
+// Bumps only after a jar is actually produced, so read-only invocations (gradlew tasks, IDE syncs)
+// leave the counter alone.
+def bumpBuildNumber = tasks.register('bumpBuildNumber') {
+	doLast {
+		buildNumberFile.text = (buildNumber + 1).toString()
+	}
+}
 
 base {
 	archivesName = project.archives_base_name
@@ -44,4 +60,8 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_${project.base.archivesName.get()}" }
 	}
+}
+
+tasks.named('remapJar') {
+	finalizedBy bumpBuildNumber
 }
