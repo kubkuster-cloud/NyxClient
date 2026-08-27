@@ -9,9 +9,12 @@ plugins {
 // dirty after every single build, and the number is a local fact about this machine, not something
 // worth carrying in history. mod_version stays the real version and is still bumped by hand.
 def buildNumberFile = file('.build-number')
-def buildNumber = buildNumberFile.exists() ? (buildNumberFile.text.trim() as Integer) : 1
+def buildNumber = buildNumberFile.exists() ? (buildNumberFile.text.trim() as Integer) : 0
 
-version = "${project.mod_version}+build.${buildNumber}"
+// mod_version carries major.minor; the patch is the build counter, so the version itself climbs
+// 0.1.0, 0.1.1, 0.1.2 with each jar. Bump mod_version by hand for a real release and delete
+// .build-number to restart the patch at 0.
+version = "${project.mod_version}.${buildNumber}"
 group = project.maven_group
 
 // Bumps only after a jar is actually produced, so read-only invocations (gradlew tasks, IDE syncs)
