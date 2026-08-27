@@ -55,6 +55,7 @@ java -jar gradle\wrapper\gradle-wrapper.jar runClient
 | Scaffold | Movement | Places a hotbar block underfoot when walking over a gap |
 | NoFall | Movement | Zeroes client fall distance every tick |
 | Killaura | Combat | Attacks nearest valid entity on a tick cooldown |
+| AimAssist | Combat | Eases the view toward the entity closest to the crosshair (FOV cone, capped turn rate) |
 | ESP | Render | Uses vanilla's glow-outline pass to show entities through walls |
 | Xray | Render | Cancels chunk-mesh rendering for non-ore blocks |
 | Fastbreak | World | Overrides calculated mining speed to break blocks instantly |

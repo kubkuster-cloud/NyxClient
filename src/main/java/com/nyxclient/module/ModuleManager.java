@@ -1,5 +1,6 @@
 package com.nyxclient.module;
 
+import com.nyxclient.module.modules.combat.AimAssistModule;
 import com.nyxclient.module.modules.combat.AutoArmorModule;
 import com.nyxclient.module.modules.combat.AutoTotemModule;
 import com.nyxclient.module.modules.combat.KillauraModule;
@@ -34,6 +35,7 @@ public class ModuleManager {
 		register(new NoFallModule());
 		register(new JesusModule());
 		register(new KillauraModule());
+		register(new AimAssistModule());
 		register(new AutoTotemModule());
 		register(new AutoArmorModule());
 		register(new ESPModule());
