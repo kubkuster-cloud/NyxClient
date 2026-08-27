@@ -45,6 +45,18 @@ import java.util.Random;
  * to far away, which is an ordinary teleport) means the server rejected the client's movement and
  * dragged it back. {@link #notifySetback} pauses the combat modules for a configurable window and
  * can switch the movement modules off outright.
+ *
+ * <p>With "Auto tune" on, that same signal also walks the settings themselves: each setback moves
+ * every parameter a third of the way toward its cautious end (slower turns, more tremor, a stricter
+ * aim gate, looser attack timing) and quiet time bleeds it back toward whatever was configured. The
+ * module therefore settles wherever the server has most recently tolerated it rather than at a
+ * number guessed in advance.
+ *
+ * <p>Note what that loop can and cannot see. A setback is the only detection signal a vanilla client
+ * receives, and most rotation and combat checks do not produce one - they raise an alert on the
+ * server for staff to look at, which is invisible here. So quiet means "no movement check has
+ * rejected us", never "nothing has noticed us", and the tuning level should be read as a record of
+ * server pushback rather than as a measure of how well anything is working.
  */
 public class AntiCheatModule extends Module {
 
@@ -64,6 +76,25 @@ public class AntiCheatModule extends Module {
 	private final IntSetting backOffTicks = addSetting(new IntSetting("Backoff ticks", 60, 0, 200));
 	private final BoolSetting disableMovement = addSetting(new BoolSetting("Kill movement on setback", true));
 	private final BoolSetting announce = addSetting(new BoolSetting("Announce setbacks", true));
+	private final BoolSetting autoTune = addSetting(new BoolSetting("Auto tune", true));
+	private final IntSetting relaxSeconds = addSetting(new IntSetting("Relax seconds", 45, 5, 300));
+
+	/**
+	 * How far the module has walked its own settings toward the cautious end: 0 uses the values above
+	 * exactly as configured, 1 uses {@link #SAFE_MAX_TURN} and friends. Each setback pushes it up,
+	 * quiet ticks bleed it back down, so the module ends up sitting at whatever the server has most
+	 * recently tolerated instead of at a number picked by hand.
+	 */
+	private static volatile double tuning = 0.0;
+
+	/** The cautious end of each range: slow turns, visible tremor, strict aim gate, loose timing. */
+	private static final double SAFE_MAX_TURN = 6.0;
+	private static final double SAFE_JITTER = 2.0;
+	private static final double SAFE_TOLERANCE = 2.5;
+	private static final int SAFE_ATTACK_JITTER = 6;
+
+	/** One setback moves a third of the way to cautious, so three in a row pin it there. */
+	private static final double SETBACK_STEP = 0.34;
 
 	/** Ticks left in a post-setback pause. Written from the packet handler, read from the tick loop. */
 	private static volatile int suppressTicks = 0;
@@ -80,6 +111,9 @@ public class AntiCheatModule extends Module {
 	protected void onEnable() {
 		active = true;
 		suppressTicks = 0;
+		// Start from the configured values again: what the last server tolerated says nothing about
+		// this one, and re-enabling by hand is the clearest signal of a fresh start available here.
+		tuning = 0.0;
 	}
 
 	@Override
@@ -95,6 +129,39 @@ public class AntiCheatModule extends Module {
 
 		lastTickPos = player.getPos();
 		if (suppressTicks > 0) suppressTicks--;
+
+		// Bleed back toward the configured values while nothing is pushing back, so a single bad
+		// moment does not leave the module crawling for the rest of the session.
+		if (autoTune.get() && tuning > 0.0) {
+			tuning = Math.max(0.0, tuning - 1.0 / (relaxSeconds.get() * 20.0));
+		}
+	}
+
+	/** Interpolates between the configured value and the cautious one by the current tuning level. */
+	private double blend(double configured, double safe) {
+		if (!autoTune.get()) return configured;
+		return configured + (safe - configured) * tuning;
+	}
+
+	private float effectiveMaxTurn() {
+		return (float) blend(maxTurn.get(), SAFE_MAX_TURN);
+	}
+
+	private double effectiveJitter() {
+		return blend(jitter.get(), SAFE_JITTER);
+	}
+
+	private double effectiveTolerance() {
+		return blend(aimTolerance.get(), SAFE_TOLERANCE);
+	}
+
+	private int effectiveAttackJitter() {
+		return (int) Math.round(blend(attackJitter.get(), SAFE_ATTACK_JITTER));
+	}
+
+	/** 0-100 readout of how far into the cautious end the module has tuned itself. */
+	public static int tuningPercent() {
+		return (int) Math.round(tuning * 100.0);
 	}
 
 	/**
@@ -136,7 +203,7 @@ public class AntiCheatModule extends Module {
 		float deltaYaw = MathHelper.wrapDegrees(targetYaw - currentYaw);
 		float deltaPitch = clampedTarget - currentPitch;
 
-		double spread = m.jitter.get();
+		double spread = m.effectiveJitter();
 		if (spread > 0.0) {
 			// Applied to the delta rather than to the stored target, so it stays a per-tick tremor
 			// instead of accumulating into a drift away from the target.
@@ -144,7 +211,7 @@ public class AntiCheatModule extends Module {
 			deltaPitch += (float) (RANDOM.nextGaussian() * spread * 0.5);
 		}
 
-		float cap = m.maxTurn.get().floatValue();
+		float cap = m.effectiveMaxTurn();
 		deltaYaw = MathHelper.clamp(deltaYaw, -cap, cap);
 		deltaPitch = MathHelper.clamp(deltaPitch, -cap, cap);
 
@@ -177,7 +244,7 @@ public class AntiCheatModule extends Module {
 		double yawOff = MathHelper.wrapDegrees(wantYaw - player.getYaw());
 		double pitchOff = wantPitch - player.getPitch();
 
-		return Math.sqrt(yawOff * yawOff + pitchOff * pitchOff) <= m.aimTolerance.get();
+		return Math.sqrt(yawOff * yawOff + pitchOff * pitchOff) <= m.effectiveTolerance();
 	}
 
 	/** Spreads a fixed tick cooldown so repeated actions stop landing on an exact period. */
@@ -185,7 +252,7 @@ public class AntiCheatModule extends Module {
 		AntiCheatModule m = instance;
 		if (m == null || !active) return baseTicks;
 
-		int spread = m.attackJitter.get();
+		int spread = m.effectiveAttackJitter();
 		if (spread <= 0) return baseTicks;
 
 		return Math.max(1, baseTicks + RANDOM.nextInt(spread * 2 + 1) - spread);
@@ -203,9 +270,17 @@ public class AntiCheatModule extends Module {
 	 */
 	public static void notifySetback(Vec3d correctedPos) {
 		AntiCheatModule m = instance;
-		if (m == null || !active || !m.backOff.get()) return;
+		if (m == null || !active) return;
 
 		if (correctedPos.squaredDistanceTo(lastTickPos) > 64.0) return;
+
+		// Tuning tracks setbacks whether or not the pause is switched on: it is a measurement of how
+		// the server is reacting, not part of the reaction.
+		if (m.autoTune.get()) {
+			tuning = Math.min(1.0, tuning + SETBACK_STEP);
+		}
+
+		if (!m.backOff.get()) return;
 
 		suppressTicks = m.backOffTicks.get();
 
@@ -220,7 +295,8 @@ public class AntiCheatModule extends Module {
 		if (m.announce.get()) {
 			ClientPlayerEntity player = MinecraftClient.getInstance().player;
 			if (player != null) {
-				player.sendMessage(Text.literal("[Nyx] Setback received - pausing for " + suppressTicks + " ticks"), false);
+				player.sendMessage(Text.literal("[Nyx] Setback received - pausing for " + suppressTicks
+						+ " ticks, tuning at " + tuningPercent() + "%"), false);
 			}
 		}
 	}
