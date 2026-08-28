@@ -53,7 +53,8 @@ to restart the patch at 0.
 - `gui/ClickGuiScreen` — ClickGUI with draggable per-category panels, expandable settings rows,
   checkboxes and sliders. Opened with **P** by default, rebindable in vanilla Controls under
   `key.nyxclient.open_gui`. P is vanilla's Social Interactions key, so that binding is unbound at
-  startup for as long as it collides with ours
+  startup for as long as it collides with ours. An install carrying the older Right Shift default in
+  its options.txt is pulled forward to P on the next launch, unless the key was picked deliberately
 - `config/ConfigManager` — saves enabled state + settings to `<gamedir>/config/nyxclient.json`
 - `mixin/` — the seven hooks that can't be done through Fabric API events alone (see below)
 
