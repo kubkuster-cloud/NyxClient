@@ -45,8 +45,9 @@ java -jar gradle\wrapper\gradle-wrapper.jar runClient
 
 - `module/` — module base class, `ModuleManager`, and all modules under `module/modules/<category>`
 - `setting/` — typed, serializable module settings (bool/double/int)
-- `gui/ClickGuiScreen` — minimal ClickGUI, opened with **Right Shift** by default (rebindable in
-  vanilla Controls once a keybinding entry exists — see `key.nyxclient.open_gui`)
+- `gui/ClickGuiScreen` — minimal ClickGUI, opened with **P** by default (rebindable in vanilla
+  Controls once a keybinding entry exists — see `key.nyxclient.open_gui`). P is vanilla's Social
+  Interactions key, so that binding is unbound at startup while it collides with ours
 - `config/ConfigManager` — saves enabled state + settings to `config/nyxclient.json`
 - `mixin/` — the two hooks that can't be done through Fabric API events alone (Xray block culling,
   Fastbreak mining speed)
