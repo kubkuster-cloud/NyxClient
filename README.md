@@ -51,7 +51,11 @@ to restart the patch at 0.
 - `module/` — module base class, `ModuleManager`, and all modules under `module/modules/<category>`
 - `setting/` — typed, serializable module settings (bool/double/int)
 - `gui/ClickGuiScreen` — ClickGUI with draggable per-category panels, expandable settings rows,
-  checkboxes and sliders. Opened with **P** by default, rebindable in vanilla Controls under
+  checkboxes and sliders. On a module row: **left-click** toggles it, **right-click** opens its
+  settings, **middle-click** listens for a key to bind it to (Delete/Backspace clears the bind,
+  Escape cancels). The bound key shows on the right of the row, amber when it is the same key that
+  opens the GUI. Binds fire only while no screen is open, and are saved to `nyxclient.json`
+  immediately. Opened with **P** by default, rebindable in vanilla Controls under
   `key.nyxclient.open_gui`. P is vanilla's Social Interactions key, so that binding is unbound at
   startup for as long as it collides with ours. An install carrying the older Right Shift default in
   its options.txt is pulled forward to P on the next launch, unless the key was picked deliberately

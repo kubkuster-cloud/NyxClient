@@ -1,6 +1,7 @@
 package com.nyxclient.gui;
 
 import com.nyxclient.NyxClient;
+import com.nyxclient.config.ConfigManager;
 import com.nyxclient.module.Category;
 import com.nyxclient.module.Module;
 import com.nyxclient.setting.BoolSetting;
@@ -9,14 +10,17 @@ import com.nyxclient.setting.IntSetting;
 import com.nyxclient.setting.Setting;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,6 +36,9 @@ public class ClickGuiScreen extends Screen {
 	private static final int RADIUS = 3;
 	private static final int CHECKBOX_SIZE = 6;
 	private static final int TRACK_HEIGHT = 2;
+	private static final int BIND_GAP = 6;
+	private static final int SETTINGS_DOT_ZONE = 6;
+	private static final String LISTENING_LABEL = "...";
 
 	// OpenSans (SIL OFL license, see licenses/OFL-OpenSans.txt) in place of Minecraft's bitmap
 	// default font. Each font.json falls back to minecraft:default for any glyph it doesn't cover.
@@ -52,6 +59,9 @@ public class ClickGuiScreen extends Screen {
 	private static final int TRACK_FILL = 0xFFE8E8EE;
 	private static final int CHECKBOX_OFF = 0x50FFFFFF;
 	private static final int CHECKBOX_ON = 0xFFE8E8EE;
+	private static final int TEXT_BIND = 0xFF8A8A90;
+	private static final int TEXT_BIND_LISTENING = 0xFFF5F5F5;
+	private static final int TEXT_BIND_CONFLICT = 0xFFE0A64B;
 
 	// Static so drag/collapse/expand state survives closing and reopening the GUI within the same session.
 	private static final Map<Category, Panel> PANELS = new EnumMap<>(Category.class);
@@ -61,6 +71,9 @@ public class ClickGuiScreen extends Screen {
 	private Panel dragging;
 	private int dragOffsetX;
 	private int dragOffsetY;
+
+	// The module waiting for the next key press to become its bind, or null when nothing is listening.
+	private Module binding;
 
 	private Setting<?> draggingSlider;
 	private int sliderTrackX1;
@@ -122,6 +135,13 @@ public class ClickGuiScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		// A click while listening means "never mind" - swallowed rather than passed on, so aiming at
+		// a module row to cancel doesn't also toggle it.
+		if (binding != null) {
+			stopBinding();
+			return true;
+		}
+
 		for (int i = panels.size() - 1; i >= 0; i--) {
 			Panel panel = panels.get(i);
 
@@ -143,13 +163,17 @@ public class ClickGuiScreen extends Screen {
 
 			if (hit.module != null) {
 				// Left toggles the module, right opens its settings - so a module with settings is
-				// still one click to turn on, same as one without.
+				// still one click to turn on, same as one without. Middle starts listening for a
+				// bind, the one button neither of those already claims.
 				if (button == 0) {
 					hit.module.toggle();
 				} else if (button == 1 && !hit.module.getSettings().isEmpty()) {
 					if (!EXPANDED.remove(hit.module)) {
 						EXPANDED.add(hit.module);
 					}
+					panel.fitWidth();
+				} else if (button == 2) {
+					binding = hit.module;
 					panel.fitWidth();
 				}
 				return true;
@@ -222,6 +246,57 @@ public class ClickGuiScreen extends Screen {
 		return String.valueOf(setting.get());
 	}
 
+	/**
+	 * While a module is listening, every key belongs to it - including Escape, which would otherwise
+	 * close the screen out from under the bind that was being set. Escape leaves the existing bind
+	 * alone; Delete and Backspace clear it; anything else becomes the new bind.
+	 */
+	@Override
+	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+		if (binding == null) {
+			return super.keyPressed(keyCode, scanCode, modifiers);
+		}
+
+		if (keyCode != GLFW.GLFW_KEY_ESCAPE) {
+			boolean clear = keyCode == GLFW.GLFW_KEY_DELETE || keyCode == GLFW.GLFW_KEY_BACKSPACE;
+			binding.setKeyCode(clear ? GLFW.GLFW_KEY_UNKNOWN : keyCode);
+			// Binds are set rarely and deliberately, so persist on the spot rather than trusting the
+			// client to shut down cleanly enough for the save on CLIENT_STOPPING to run.
+			ConfigManager.save();
+		}
+
+		stopBinding();
+		return true;
+	}
+
+	private void stopBinding() {
+		binding = null;
+		for (Panel panel : panels) {
+			panel.fitWidth();
+		}
+	}
+
+	/** Right-hand label on a module row: the key it toggles on, or nothing when it has no bind. */
+	private String bindLabel(Module module) {
+		if (module == binding) {
+			return LISTENING_LABEL;
+		}
+		int keyCode = module.getKeyCode();
+		if (keyCode == GLFW.GLFW_KEY_UNKNOWN) {
+			return "";
+		}
+		return InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString().toUpperCase(Locale.ROOT);
+	}
+
+	private int bindColor(Module module) {
+		if (module == binding) {
+			return TEXT_BIND_LISTENING;
+		}
+		// A module sharing the GUI's own key toggles on the very press that opens the GUI. That is
+		// allowed - it is the player's key to spend - but it is worth being able to see.
+		return module.getKeyCode() == NyxClient.getOpenGuiKeyCode() ? TEXT_BIND_CONFLICT : TEXT_BIND;
+	}
+
 	@Override
 	public boolean shouldPause() {
 		return false;
@@ -275,7 +350,9 @@ public class ClickGuiScreen extends Screen {
 			int widest = PADDING_X + textRenderer.getWidth(styled(category.name(), FONT_HEADER)) + 4 + ARROW_ZONE;
 
 			for (Module module : modules) {
-				widest = Math.max(widest, textRenderer.getWidth(styled(module.getName(), FONT_REGULAR)) + PADDING_X * 2);
+				int rowWidth = PADDING_X + textRenderer.getWidth(styled(module.getName(), FONT_REGULAR))
+						+ bindWidth(module) + rightReserve(module) + PADDING_X;
+				widest = Math.max(widest, rowWidth);
 
 				if (!EXPANDED.contains(module)) continue;
 				for (Setting<?> setting : module.getSettings()) {
@@ -286,6 +363,15 @@ public class ClickGuiScreen extends Screen {
 			}
 
 			width = Math.max(MIN_WIDTH, widest);
+		}
+
+		private int bindWidth(Module module) {
+			String label = bindLabel(module);
+			return label.isEmpty() ? 0 : BIND_GAP + textRenderer.getWidth(styled(label, FONT_REGULAR));
+		}
+
+		private int rightReserve(Module module) {
+			return module.getSettings().isEmpty() ? 0 : SETTINGS_DOT_ZONE;
 		}
 
 		int height() {
@@ -358,7 +444,15 @@ public class ClickGuiScreen extends Screen {
 				}
 
 				int textColor = module.isEnabled() ? TEXT_ENABLED : TEXT_DISABLED;
-				context.drawTextWithShadow(textRenderer, styled(module.getName(), FONT_REGULAR), x + PADDING_X, rowY + (ROW_HEIGHT - 8) / 2, textColor);
+				int textY = rowY + (ROW_HEIGHT - 8) / 2;
+				context.drawTextWithShadow(textRenderer, styled(module.getName(), FONT_REGULAR), x + PADDING_X, textY, textColor);
+
+				String bind = bindLabel(module);
+				if (!bind.isEmpty()) {
+					int bindX = x + width - PADDING_X - rightReserve(module)
+							- textRenderer.getWidth(styled(bind, FONT_REGULAR));
+					context.drawTextWithShadow(textRenderer, styled(bind, FONT_REGULAR), bindX, textY, bindColor(module));
+				}
 
 				// A faint dot marks modules that have settings worth right-clicking for.
 				if (!module.getSettings().isEmpty()) {

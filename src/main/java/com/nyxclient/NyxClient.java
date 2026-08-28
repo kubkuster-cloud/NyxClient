@@ -61,6 +61,19 @@ public class NyxClient implements ClientModInitializer {
 	}
 
 	/**
+	 * The key the ClickGUI currently opens on, as a GLFW code, or {@link GLFW#GLFW_KEY_UNKNOWN} when
+	 * it is unbound or bound to something that isn't a keyboard key. The GUI uses it to mark a module
+	 * bind that would fire on the same press that opens the GUI.
+	 */
+	public static int getOpenGuiKeyCode() {
+		if (openGuiKey == null) {
+			return GLFW.GLFW_KEY_UNKNOWN;
+		}
+		InputUtil.Key bound = KeyBindingHelper.getBoundKeyOf(openGuiKey);
+		return bound.getCategory() == InputUtil.Type.KEYSYM ? bound.getCode() : GLFW.GLFW_KEY_UNKNOWN;
+	}
+
+	/**
 	 * Minecraft persists every registered keybinding into options.txt, so an install that ran an
 	 * earlier build still carries the key that was default back then - changing GUI_KEY_DEFAULT
 	 * alone moves nothing for anyone who has already launched the game once.
