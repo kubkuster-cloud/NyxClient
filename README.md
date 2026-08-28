@@ -60,7 +60,7 @@ to restart the patch at 0.
   startup for as long as it collides with ours. An install carrying the older Right Shift default in
   its options.txt is pulled forward to P on the next launch, unless the key was picked deliberately
 - `config/ConfigManager` — saves enabled state + settings to `<gamedir>/config/nyxclient.json`
-- `mixin/` — the seven hooks that can't be done through Fabric API events alone (see below)
+- `mixin/` — the nine hooks that can't be done through Fabric API events alone (see below)
 
 ## Modules
 
@@ -78,6 +78,7 @@ to restart the patch at 0.
 | AutoArmor | Combat | Equips the best armor carried, swapping in any upgrade found in the inventory |
 | ESP | Render | Uses vanilla's glow-outline pass to show entities through walls |
 | Fullbright | Render | Renders every block at full brightness; reloads chunks on toggle |
+| Freecam | Render | Flies the camera off the body, which stands still to the server |
 | NoHurtCam | Render | Removes the camera tilt played when you take damage |
 | Fastbreak | World | Overrides calculated mining speed to break blocks instantly |
 | AutoTool | World | Switches to the fastest suitable tool for the block being mined |
@@ -94,7 +95,9 @@ API names), and confirmed against the generated refmap:
 | `ClientPlayNetworkHandlerMixin` | `onPlayerPositionLook` (TAIL) | AntiCheat setback detection |
 | `EntityMixin` | `setGlowing` → redirects `isGlowing()` to `isGlowingLocal()` | ESP |
 | `GameRendererMixin` | `tiltViewWhenHurt` (cancelled) | NoHurtCam |
+| `KeyboardInputMixin` | `tick` → blanks the player's movement input | Freecam |
 | `MinecraftClientMixin` | `isAmbientOcclusionEnabled` | Fullbright |
+| `MouseMixin` | `updateMouse` → redirects `changeLookDirection` onto the camera | Freecam |
 | `PlayerEntityMixin` | `getBlockBreakingSpeed(BlockState)` | Fastbreak |
 | `WorldRendererMixin` | `getLightmapCoordinates(BlockRenderView, BlockState, BlockPos)` | Fullbright |
 

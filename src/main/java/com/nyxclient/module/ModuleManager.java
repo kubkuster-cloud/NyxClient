@@ -11,6 +11,7 @@ import com.nyxclient.module.modules.movement.NoFallModule;
 import com.nyxclient.module.modules.movement.ScaffoldModule;
 import com.nyxclient.module.modules.movement.SpeedModule;
 import com.nyxclient.module.modules.render.ESPModule;
+import com.nyxclient.module.modules.render.FreecamModule;
 import com.nyxclient.module.modules.render.FullbrightModule;
 import com.nyxclient.module.modules.render.NoHurtCamModule;
 import com.nyxclient.module.modules.world.AutoRespawnModule;
@@ -44,6 +45,7 @@ public class ModuleManager {
 		register(new AutoArmorModule());
 		register(new ESPModule());
 		register(new FullbrightModule());
+		register(new FreecamModule());
 		register(new NoHurtCamModule());
 		register(new FastbreakModule());
 		register(new AutoToolModule());
