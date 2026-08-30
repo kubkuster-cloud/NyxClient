@@ -6,3 +6,8 @@ out/
 *.iml
 run/
 .build-number
+
+# Consolas is Microsoft's, licensed with Windows/Office - usable on a machine that
+# has it, not ours to redistribute in the jar or in this repo. The font.json files
+# fall through to the bundled OpenSans wherever these are absent.
+src/main/resources/assets/nyxclient/font/consolas_*.ttf
