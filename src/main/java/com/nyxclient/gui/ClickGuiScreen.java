@@ -33,7 +33,6 @@ public class ClickGuiScreen extends Screen {
 	private static final int SETTING_ROW_HEIGHT = 12;
 	private static final int SETTING_INDENT = 9;
 	private static final int ARROW_ZONE = 12;
-	private static final int RADIUS = 3;
 	private static final int CHECKBOX_SIZE = 6;
 	private static final int TRACK_HEIGHT = 2;
 	private static final int BIND_GAP = 6;
@@ -423,13 +422,12 @@ public class ClickGuiScreen extends Screen {
 		void render(DrawContext context, int mouseX, int mouseY) {
 			int bodyHeight = height();
 
-			boolean hasBody = !collapsed && !modules.isEmpty();
-			if (hasBody) {
-				RoundedRect.fill(context, x, y, x + width, y + bodyHeight, RADIUS, PANEL_BG);
-				RoundedRect.fillTop(context, x, y, x + width, y + HEADER_HEIGHT, RADIUS, HEADER_BG);
-			} else {
-				RoundedRect.fill(context, x, y, x + width, y + HEADER_HEIGHT, RADIUS, HEADER_BG);
+			// Body first, header painted over its top strip - with square corners the two are plain
+			// rects, so a collapsed panel is just the header on its own.
+			if (!collapsed && !modules.isEmpty()) {
+				context.fill(x, y, x + width, y + bodyHeight, PANEL_BG);
 			}
+			context.fill(x, y, x + width, y + HEADER_HEIGHT, HEADER_BG);
 
 			context.drawTextWithShadow(textRenderer, styled(category.name(), FONT_HEADER), x + PADDING_X, y + (HEADER_HEIGHT - 8) / 2, TEXT_HEADER);
 			context.drawTextWithShadow(textRenderer, Text.literal(collapsed ? "▶" : "▼"), x + width - 10, y + (HEADER_HEIGHT - 8) / 2, ARROW_COLOR);
